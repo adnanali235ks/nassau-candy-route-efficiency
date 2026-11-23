@@ -1,0 +1,105 @@
+{
+  "screenshots": {
+    "executive_overview": {
+      "height_px": 2579,
+      "charts": 4,
+      "download_buttons": 0
+    },
+    "geographic_analysis": {
+      "height_px": 1743,
+      "charts": 3,
+      "download_buttons": 0
+    },
+    "route_performance": {
+      "height_px": 2315,
+      "charts": 7,
+      "download_buttons": 0
+    },
+    "optimization_center": {
+      "height_px": 3625,
+      "charts": 1,
+      "download_buttons": 2
+    },
+    "scenario_simulator": {
+      "height_px": 2994,
+      "charts": 2,
+      "download_buttons": 0
+    },
+    "smart_recommendations": {
+      "height_px": 2395,
+      "charts": 0,
+      "download_buttons": 1
+    },
+    "anomaly_detection": {
+      "height_px": 1810,
+      "charts": 0,
+      "download_buttons": 4
+    },
+    "reports": {
+      "height_px": 1743,
+      "charts": 0,
+      "download_buttons": 16
+    },
+    "geographic_analysis_distance": {
+      "height_px": 2027,
+      "charts": 3
+    },
+    "geographic_analysis_density": {
+      "height_px": 2307,
+      "charts": 3
+    },
+    "route_performance_ship_modes": {
+      "height_px": 2587,
+      "charts": 7
+    },
+    "route_performance_drilldown": {
+      "height_px": 2867,
+      "charts": 7
+    },
+    "anomaly_detection_duplicates": {
+      "height_px": 3147,
+      "charts": 0
+    }
+  },
+  "downloads": {
+    "optimization_center": {
+      "hypothetical_allocation_by_cell.csv": "CSV, 42 KB, 384 lines",
+      "hypothetical_allocation_by_order_line.csv": "CSV, 1875 KB, 10195 lines",
+      "_buttons_clicked": 2,
+      "_files_received": 2
+    },
+    "smart_recommendations": {
+      "recommendations.csv": "CSV, 8 KB, 18 lines",
+      "_buttons_clicked": 1,
+      "_files_received": 1
+    },
+    "anomaly_detection": {
+      "duplicate_order_lines.csv": "CSV, 868 KB, 3019 lines",
+      "low_volume_factories_products.csv": "CSV, 1 KB, 10 lines",
+      "product_division_mismatch.csv": "CSV, 1 KB, 7 lines",
+      "route_distance_outliers.csv": "CSV, 0 KB, 2 lines",
+      "_buttons_clicked": 4,
+      "_files_received": 4
+    },
+    "reports": {
+      "anomalies.csv": "CSV, 786 KB, 3035 lines",
+      "changed_demand_cells.csv": "CSV, 42 KB, 256 lines",
+      "data_quality.csv": "CSV, 0 KB, 11 lines",
+      "factory_performance.csv": "CSV, 0 KB, 6 lines",
+      "factory_volumes.csv": "CSV, 0 KB, 6 lines",
+      "kpis.csv": "CSV, 0 KB, 9 lines",
+      "optimization_comparison.csv": "CSV, 0 KB, 3 lines",
+      "order_allocations.csv": "CSV, 1874 KB, 10198 lines",
+      "recommendations.csv": "CSV, 8 KB, 18 lines",
+      "report_info.csv": "CSV, 0 KB, 8 lines",
+      "route_analysis_region.csv": "CSV, 3 KB, 21 lines",
+      "route_analysis_state.csv": "CSV, 27 KB, 197 lines",
+      "route_analytics_20261109_152004.xlsx": "Excel, 9 sheets, 836 KB",
+      "route_analytics_csv_20261109_152004.zip": "ZIP, 13 CSV files",
+      "route_analytics_report_20261109_152004.pdf": "PDF, 26 KB",
+      "shipping_modes.csv": "CSV, 0 KB, 5 lines",
+      "_buttons_clicked": 16,
+      "_files_received": 16
+    }
+  }
+}

@@ -1,0 +1,9 @@
+.venv/
+__pycache__/
+.pytest_cache/
+# files written by `python route_core.py`
+processed_routes.csv
+route_summary_*.csv
+ship_mode_summary.csv
+geo_bottleneck_summary.csv
+factory_route_footprint.csv

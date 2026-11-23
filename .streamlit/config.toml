@@ -1,0 +1,4 @@
+# Streamlit settings for this project.
+# "minimal" hides the toolbar's Deploy button; the app is meant to run locally only.
+[client]
+toolbarMode = "minimal"

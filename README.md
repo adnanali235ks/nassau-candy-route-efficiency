@@ -1,60 +1,104 @@
-# Nassau Candy Distributor — Factory-to-Customer Shipping Route Efficiency Analysis
+# Nassau Candy Distributor — Supply Chain Route Analytics
 
-## ⚠️ Read this first: a critical data-quality finding
+A local Streamlit dashboard that analyses factory-to-customer shipping routes for a candy distributor. It scores routes by distance and ship-mode mix, runs a clearly labelled **hypothetical** factory-allocation simulation with Google OR-Tools, flags data anomalies, generates explainable recommendations, and exports PDF, Excel and CSV reports.
 
-Before trusting any "lead time" or "delay" number from this dataset: the `Ship Date` field
-does **not** track `Order Date` realistically. Computed lead times average ~1,300 days with
-**no meaningful difference between Same Day and Standard Class shipping** — which is not
-possible for real shipment data. This points to an upstream ETL/data-generation issue.
+![Executive Overview](docs/screenshots/executive_overview.png)
 
-Because of this, **no lead-time, delay-frequency, or time-based efficiency claim appears
-anywhere in this project.** Instead, a **Route Efficiency Proxy Score** is used, built only from
-validated fields: shipping distance (factory → customer) and ship-mode mix. This is documented
-in full in Section 3 of the research paper, with a dedicated chart (`05_data_quality_exhibit.png`)
-showing the issue visually.
+## Read this first: data limitations
+- **`Ship Date` is unusable.** It does not track `Order Date` (about 1,300 days for every ship mode, including Same Day), so **no delivery-time or delay metric is reported anywhere**. Routes are scored from distance and ship-mode mix only.
+- Distances are **straight-line miles to state/province centroids**, not road distances or customer addresses. Canadian province centroids are **provisional**.
+- The dataset has **no factory column, shipping cost or capacity data.** The product-to-factory map comes from the project brief.
+- The optimizer is a **what-if simulation**, never an operational recommendation. Estimated costs appear only when you enter a rate, and are never actual costs.
 
-## What's in this package
+Details: [docs/DATA_SOURCES.md](docs/DATA_SOURCES.md).
 
-| File | Purpose |
+## What it does
+| Page | Purpose |
 |---|---|
-| `Nassau_Candy_Route_Efficiency_Research_Paper.docx` | Full research paper — methodology, data validation finding, route benchmarking, geographic bottlenecks, recommendations |
-| `Nassau_Candy_Route_Efficiency_Executive_Summary.docx` | 2-page stakeholder briefing |
-| `app.py` | Streamlit dashboard (live, filterable analytics) |
-| `route_core.py` | Core analysis engine — cleaning, route definition, efficiency proxy, ship-mode/geo analysis. Imported by `app.py` |
-| `Nassau_Candy_Distributor.csv` | Source dataset |
-| `requirements.txt` | Python dependencies |
-| `charts/` | Static chart images embedded in the report |
+| **Executive Overview** | KPIs (each labelled dataset / calculated / assumption), ship-mode and factory charts, best and worst routes, rule-based insights with a "why" line |
+| **Geographic Analysis** | Factory-to-state/province map (US and Canada), distance comparison, shipment density and bottleneck flags |
+| **Route Performance** | Route Efficiency Score leaderboard with the score broken into its parts, unscored routes listed separately, ship-mode comparison, state/province drill-down |
+| **Optimization Center** | Hypothetical allocation of demand to the nearest eligible factory (GLOP), optional hypothetical capacities, existing-vs-proposed comparison, optional illustrative cost, CSV exports with explicit split lines |
+| **Scenario Simulator** | Compare 2 to 4 hypothetical scenarios against the existing allocation |
+| **Smart Recommendations** | Rule-based prompts to investigate, each with its reason, rule and supporting values |
+| **Anomaly Detection** | IQR route outliers, duplicate lines, missing geography, price/profit patterns, factory-product patterns; flags only, nothing is deleted |
+| **Reports** | PDF report, 9-sheet Excel workbook and CSV exports, with timestamp and scenario assumptions |
 
-## Running the dashboard
+Screenshots of every page are in [docs/screenshots/](docs/screenshots/). How to use each page: [docs/USER_GUIDE.md](docs/USER_GUIDE.md).
 
-1. Keep all files in the same folder (the dashboard expects the CSV next to it).
-2. ```bash
-   pip install -r requirements.txt
-   streamlit run app.py
-   ```
-3. Four tabs:
-   - **Route Efficiency Overview** — top/bottom 10 routes by efficiency proxy, full route table
-   - **Geographic Shipping Map** — US choropleth of shipment volume, factory locations, bottleneck flags
-   - **Ship Mode Comparison** — volume and distance by ship mode, plus the data-quality exhibit
-   - **Route Drill-Down** — pick a state, see factory mix, ship-mode mix, and order-level records
+## Installation and running
+Tested on **Python 3.12 and 3.14**. Older Python versions were not tested, so none is claimed to work.
 
-Sidebar filters: date range, region, state, ship mode, minimum route distance.
+**Windows shortcut:** double-click or run `setup_env.bat` once (creates `.venv` and installs `requirements.txt` into it), then `run_app.bat` to start the dashboard. `run_app.bat` refuses to start unless the project's own `.venv` exists and contains the required packages, and it always launches Streamlit with `.venv\Scripts\python.exe`. Extra Streamlit options can be appended, for example `run_app.bat --server.port 8502`.
 
-## Headline findings
+**Manual steps (any platform):**
+```bash
+# 1. create and activate a virtual environment (inside the project folder)
+python -m venv .venv
+.venv\Scripts\activate            # Windows        (macOS/Linux: source .venv/bin/activate)
 
-- **Ship Date field is broken** — flagged prominently rather than used.
-- **Short-haul regional routes are most efficient** (Wicked Choccy's → Gulf, Secret Factory → Interior); **long-haul national routes are least efficient** (Lot's O' Nuts → Atlantic, Wicked Choccy's → Pacific).
-- The company's two highest-revenue factories are also running its two least-efficient high-volume routes.
-- **18 of 59 states** are flagged as bottleneck candidates (high volume + long distance) — led by California, New York, Pennsylvania.
+# 2. install the dependencies
+pip install -r requirements.txt
 
-## Notes for your portfolio / internship application
+# 3. start the dashboard (from the project folder)
+python -m streamlit run app.py    # opens http://localhost:8501
 
-This is a strong project to discuss in interviews specifically *because* it required pushing back
-on the brief: the assignment asked for lead-time/delay KPIs, but the data couldn't support them
-honestly. Building a defensible substitute metric and documenting the limitation — rather than
-reporting numbers you know are wrong — is exactly the kind of judgment call that distinguishes a
-strong analyst from someone who just runs the requested calculation blindly.
+# 4. run the tests
+python -m pytest
+```
+- **Always use the project's own environment, never a global or temporary Python.** Install with `.venv\Scripts\python.exe -m pip install -r requirements.txt` and start with `.venv\Scripts\python.exe -m streamlit run app.py` (macOS/Linux: `.venv/bin/python`). `.vscode/settings.json` makes VS Code select `.venv` automatically.
+- **Use `python -m streamlit run app.py`** (with the project's `.venv` active) rather than a bare `streamlit` command: it guarantees Streamlit runs under the same Python that has the packages installed. If the app is started under a Python that lacks a required package, it now shows a clear "Missing Python packages" message naming that Python and the fix. After editing code, **stop and restart the server**: a long-running Streamlit process keeps old copies of helper modules.
+- **Start the app from the project folder.** The CSV is found relative to the code, so the app also works from elsewhere, but Streamlit reads `.streamlit/config.toml` (which hides the Deploy button) only from the folder you start it in.
+- **Data file.** `Nassau_Candy_Distributor.csv` must sit in the project folder. If it is missing, empty or has the wrong columns, the dashboard shows a plain explanation of what is wrong and how to fix it instead of a traceback.
+- `python route_core.py` is a small command-line export of the processed tables (written to the current folder, git-ignored).
 
-This project pairs naturally with the companion **Product Line Profitability & Margin Performance
-Analysis** (same dataset, same Ship Date issue, different business question) — together they make
-a two-project portfolio piece showing range across profitability and logistics analytics.
+## Tested environments
+The full test suite (268 tests) was run on the final code in four environments, each with the result **268 passed**. The three fresh environments were built from `requirements.txt` alone.
+
+| Environment | Python | streamlit | pandas | numpy | plotly | ortools | openpyxl | reportlab | pytest | pyarrow | Result |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| Development `.venv` | 3.14.6 | 1.67.0 | 3.1.1 | 2.5.4 | 7.1.0 | 9.15.6755 | 3.1.5 | 5.1.0 | 9.2.0 | 26.0.1 | 268 passed (116 s) |
+| Fresh install, newest packages | 3.14.6 | 1.67.0 | 3.1.1 | 2.5.4 | 7.1.0 | 9.15.6755 | 3.1.5 | 5.1.0 | 9.2.0 | 26.0.1 | 268 passed (122 s) |
+| Fresh install, newest packages | 3.12.8 | 1.67.0 | 3.1.1 | 2.5.4 | 7.1.0 | 9.15.6755 | 3.1.5 | 5.1.0 | 9.2.0 | 26.0.1 | 268 passed (106 s) |
+| **Oldest supported versions** | 3.12.8 | 1.50.0 | 2.1.1 | 1.26.0 | 5.18.0 | 9.9.3963 | 3.1.0 | 4.0.0 | 8.0.0 | 17.0.0 | 268 passed (87 s) |
+
+- The lower bounds in `requirements.txt` are exactly the "oldest" row. **Older versions were not tested** (pandas 2.0 and numpy 1.24 cannot be installed on Python 3.12), so no compatibility with them is claimed.
+- If you stay on numpy 1.x, install `pyarrow==17.0.0`: the newest pyarrow requires numpy 2 or newer (a mismatch fails with `pyarrow requires NumPy 2.0 or newer`).
+- The application was also started from an unrelated folder and answered HTTP 200 with a healthy `/_stcore/health`; all 8 pages were captured fully rendered in a real browser, and every download button was clicked and its file checked (see `docs/screenshots/capture_report.json`).
+
+## Repository structure
+```
+run_app.bat               Windows launcher: starts the app with the project's .venv (checks packages first)
+setup_env.bat             Windows setup: creates .venv and installs requirements.txt into it
+.vscode/settings.json     VS Code uses the project's .venv interpreter
+app.py                    navigation shell (entry point)
+route_core.py             data loading and validation, reference tables, haversine, route summaries
+config.py                 editable score weights and ship-mode assumptions
+modules/                  pure logic (no Streamlit): scoring, route_analysis, optimization, scenarios,
+                          anomaly_detection, recommendations, reporting
+ui/                       Streamlit helpers: common (filters, tables), charts, scenario_controls
+views/                    the 8 dashboard pages
+utils/report_generator.py Excel (OpenPyXL), PDF (ReportLab) and CSV writers
+tools/                    optional developer tool: full-page screenshots + download tests
+tests/                    268 pytest tests
+docs/                     documentation and screenshots
+.streamlit/config.toml    hides the Deploy button
+.github/workflows/        CI configuration (never run; see below)
+Nassau_Candy_Distributor.csv   source data (never modified)
+```
+
+## Documentation
+| Document | For |
+|---|---|
+| [docs/USER_GUIDE.md](docs/USER_GUIDE.md) | Using the dashboard page by page |
+| [docs/METHODOLOGY.md](docs/METHODOLOGY.md) | How every number is calculated, with worked examples |
+| [docs/PROJECT.md](docs/PROJECT.md) | Architecture, data-flow and optimization diagrams, tests, impact map, limitations, future work |
+| [docs/INTERVIEW_PREPARATION.md](docs/INTERVIEW_PREPARATION.md) | Presentation outline and viva questions with answers |
+| [docs/DATA_SOURCES.md](docs/DATA_SOURCES.md) | Data provenance and limitations |
+| [docs/SUGAR_SHACK_INVESTIGATION.md](docs/SUGAR_SHACK_INVESTIGATION.md) | Why one factory's sales look tiny |
+
+## Known limitations (short list)
+Straight-line distances to centroids; provisional Canadian centroids; assumed score weights and ship-mode suitability; hypothetical eligibility and capacities in the optimizer; heuristic anomaly and recommendation thresholds; Excel files verified by reading them back (not by opening Excel). The full list and the future improvements are in [docs/PROJECT.md](docs/PROJECT.md).
+
+## Continuous integration
+`.github/workflows/tests.yml` runs `pytest` on Python 3.12 when the project is hosted on GitHub. **It has not been run** (the project has not been pushed anywhere); its YAML syntax was checked locally. The same suite was run locally in fresh virtual environments, listed above.

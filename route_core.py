@@ -23,6 +23,10 @@ instead, built only from fields that validate correctly:
 import pandas as pd
 import numpy as np
 from math import radians, sin, cos, sqrt, atan2
+from pathlib import Path
+
+from config import DEFAULT_SHIP_MODE_SUITABILITY
+from modules.scoring import score_routes
 
 # ---------------------------------------------------------------------------
 # REFERENCE DATA (from project brief)
@@ -84,6 +88,50 @@ STATE_CENTROIDS = {
 }
 
 
+# Canadian provinces appear in the dataset (Country/Region == "Canada", 200 rows).
+# STATUS: PROVISIONAL / UNVERIFIED. Searches of NRCan and Statistics Canada material
+# found no authoritative per-province centroid table (StatCan publishes
+# population-weighted "representative points", a different definition). Only
+# Ontario's value could be cross-checked: it equals the midpoint of Ontario's
+# bounding box (~50.0, -86.0), whereas a news-reported calculated centre lies
+# nearer Hornepayne. The rest are approximate area-centre values entered by the
+# developer, rounded to 1 decimal degree. Sensitivity test: moving the most
+# extreme province (Newfoundland and Labrador) by ~100 miles changes any route
+# score by at most 1.4 points. Details: docs/DATA_SOURCES.md.
+CANADA_CENTROIDS_STATUS = "PROVISIONAL"
+CANADA_PROVINCE_CENTROIDS = {
+    "Alberta": (54.5, -115.0),
+    "British Columbia": (53.7, -127.6),
+    "Manitoba": (54.8, -98.8),
+    "New Brunswick": (46.5, -66.4),
+    "Newfoundland and Labrador": (53.1, -57.7),
+    "Nova Scotia": (45.0, -63.0),
+    "Ontario": (50.0, -86.0),
+    "Prince Edward Island": (46.4, -63.2),
+    "Quebec": (52.4, -71.8),
+    "Saskatchewan": (54.7, -106.0),
+}
+
+# One lookup for every location we can place on a map. US states + Canadian provinces.
+STATE_CENTROIDS = {**STATE_CENTROIDS, **CANADA_PROVINCE_CENTROIDS}
+
+
+# Two-letter codes for the US choropleth (the map draws US states only).
+US_STATE_ABBREVIATIONS = {
+    "Alabama": "AL", "Alaska": "AK", "Arizona": "AZ", "Arkansas": "AR", "California": "CA",
+    "Colorado": "CO", "Connecticut": "CT", "Delaware": "DE", "District of Columbia": "DC",
+    "Florida": "FL", "Georgia": "GA", "Hawaii": "HI", "Idaho": "ID", "Illinois": "IL",
+    "Indiana": "IN", "Iowa": "IA", "Kansas": "KS", "Kentucky": "KY", "Louisiana": "LA",
+    "Maine": "ME", "Maryland": "MD", "Massachusetts": "MA", "Michigan": "MI", "Minnesota": "MN",
+    "Mississippi": "MS", "Missouri": "MO", "Montana": "MT", "Nebraska": "NE", "Nevada": "NV",
+    "New Hampshire": "NH", "New Jersey": "NJ", "New Mexico": "NM", "New York": "NY",
+    "North Carolina": "NC", "North Dakota": "ND", "Ohio": "OH", "Oklahoma": "OK", "Oregon": "OR",
+    "Pennsylvania": "PA", "Rhode Island": "RI", "South Carolina": "SC", "South Dakota": "SD",
+    "Tennessee": "TN", "Texas": "TX", "Utah": "UT", "Vermont": "VT", "Virginia": "VA",
+    "Washington": "WA", "West Virginia": "WV", "Wisconsin": "WI", "Wyoming": "WY",
+}
+
+
 def haversine_miles(lat1, lon1, lat2, lon2):
     R = 3958.8
     p1, p2 = radians(lat1), radians(lat2)
@@ -97,10 +145,56 @@ def haversine_miles(lat1, lon1, lat2, lon2):
 # LOAD & CLEAN
 # ---------------------------------------------------------------------------
 
-def load_and_clean(path="Nassau_Candy_Distributor.csv"):
-    df = pd.read_csv(path)
+PROJECT_DIR = Path(__file__).resolve().parent
+DEFAULT_CSV_NAME = "Nassau_Candy_Distributor.csv"
+# Resolved from this file's location, NOT from the terminal's current folder.
+DEFAULT_CSV_PATH = PROJECT_DIR / DEFAULT_CSV_NAME
+
+# Columns the analysis reads. A CSV missing any of them is rejected with a clear message.
+REQUIRED_COLUMNS = ["Row ID", "Order ID", "Order Date", "Ship Date", "Ship Mode", "Customer ID", "Country/Region",
+                    "City", "State/Province", "Postal Code", "Division", "Region", "Product ID", "Product Name",
+                    "Sales", "Units", "Gross Profit", "Cost"]
+
+
+class DataFileError(Exception):
+    """A data-file problem the user can fix. The message says what is wrong and how to fix it."""
+
+
+def _read_csv(path):
+    """Read the CSV, turning missing / empty / unreadable / wrong-schema files into DataFileError."""
+    p = Path(path) if path else DEFAULT_CSV_PATH
+    if not p.is_absolute() and not p.exists():
+        p = PROJECT_DIR / p                       # a bare file name is looked up in the project folder
+    fix = (f"Fix: place the original '{DEFAULT_CSV_NAME}' in the project folder ({PROJECT_DIR}) "
+           f"and start the app again.")
+    if not p.exists():
+        raise DataFileError(f"Data file not found: {p}\nExpected file: {DEFAULT_CSV_NAME} in {PROJECT_DIR}.\n{fix}")
+    if not p.is_file():
+        raise DataFileError(f"The data path is not a file: {p}\n{fix}")
+    try:
+        df = pd.read_csv(p)
+    except pd.errors.EmptyDataError:
+        raise DataFileError(f"The data file is empty: {p}\n{fix}") from None
+    except (pd.errors.ParserError, UnicodeDecodeError) as exc:
+        raise DataFileError(f"The data file could not be read as CSV: {p}\nDetails: {exc}\n{fix}") from None
+    missing = [c for c in REQUIRED_COLUMNS if c not in df.columns]
+    if missing:
+        raise DataFileError(f"The data file is missing required column(s): {', '.join(missing)}\n"
+                            f"File: {p}\nRequired columns: {', '.join(REQUIRED_COLUMNS)}\n"
+                            f"Found columns: {', '.join(map(str, df.columns))}\n{fix}")
+    return df
+
+
+def load_and_clean(path=None):
+    """Load and clean the order data. Raises DataFileError (with a fix) for file problems.
+
+    path: optional CSV path; default is Nassau_Candy_Distributor.csv in the project folder.
+    """
+    df = _read_csv(path)
     before = len(df)
 
+    for col in ("Sales", "Units"):                # non-numeric text becomes NaN and the row is dropped below
+        df[col] = pd.to_numeric(df[col], errors="coerce")
     df = df.drop_duplicates(subset="Row ID")
     df = df.dropna(subset=["Order Date", "Ship Date", "Ship Mode", "State/Province",
                             "Region", "Product Name", "Sales", "Units"])
@@ -112,6 +206,10 @@ def load_and_clean(path="Nassau_Candy_Distributor.csv"):
     df["Order Date"] = pd.to_datetime(df["Order Date"], format="%d-%m-%Y", errors="coerce")
     df["Ship Date"] = pd.to_datetime(df["Ship Date"], format="%d-%m-%Y", errors="coerce")
     df = df.dropna(subset=["Order Date", "Ship Date"])
+    if df.empty:
+        raise DataFileError("No usable rows remain after cleaning (rows need valid dates in day-month-year format, "
+                            "positive Sales and Units, and no missing key fields).\n"
+                            f"Check the contents of {DEFAULT_CSV_NAME}.")
 
     # Raw lead time -- computed for transparency, but flagged unreliable (see module docstring)
     df["Raw Lead Time (days)"] = (df["Ship Date"] - df["Order Date"]).dt.days
@@ -141,23 +239,51 @@ def load_and_clean(path="Nassau_Candy_Distributor.csv"):
     df["Route (Factory-Region)"] = df["Factory"] + " -> " + df["Region"]
     df["Route (Factory-State)"] = df["Factory"] + " -> " + df["State/Province"]
 
-    meta = {"rows_before": before, "rows_removed": removed, "rows_after": len(df)}
+    # --- Data-quality flags (flag only; nothing is deleted here) ---------------
+    # Missing geography: location not in STATE_CENTROIDS, or factory unmapped.
+    # Such rows keep NaN distance and are reported, never silently dropped or zeroed.
+    df["Missing Geo"] = df["Route Distance (mi)"].isna()
+    # Repeated Order ID + Product ID: may be duplicates OR legitimate order lines,
+    # so they are flagged for investigation, not removed.
+    df["Repeated Order-Product Line"] = df.duplicated(subset=["Order ID", "Product ID"], keep=False)
+
+    meta = {
+        "rows_before": before, "rows_removed": removed, "rows_after": len(df),
+        "rows_missing_geo": int(df["Missing Geo"].sum()),
+        "unmapped_locations": sorted(df.loc[df["Missing Geo"], "State/Province"].unique()),
+        "rows_repeated_order_product": int(df["Repeated Order-Product Line"].sum()),
+    }
     return df, meta
 
 
 # ---------------------------------------------------------------------------
-# ROUTE EFFICIENCY PROXY
+# ROUTE EFFICIENCY SCORE
 # ---------------------------------------------------------------------------
-# Since real lead time is invalid, we build a defensible "Route Efficiency
-# Proxy Score" (0-100, higher = more efficient) from the two fields that DO
-# validate: shorter distance per shipment, and ship-mode mix (Same Day/First
-# Class shipments are assumed faster service tiers regardless of the broken
-# date field, since that's what the category itself represents).
+# Real lead time is invalid (see module docstring), so routes are scored from the
+# two fields that DO validate: distance and ship-mode mix. The scoring maths
+# (70% distance / 30% ship-mode by default, configurable) lives in
+# modules/scoring.py; the editable assumptions live in config.py.
 
-SHIP_MODE_SPEED_WEIGHT = {"Same Day": 1.00, "First Class": 0.85, "Second Class": 0.6, "Standard Class": 0.4}
+# Backward-compatible alias for code that imported the old constant.
+SHIP_MODE_SPEED_WEIGHT = DEFAULT_SHIP_MODE_SUITABILITY
 
 
-def route_summary(df, level="Region"):
+def route_summary(df, level="Region", include_unscored=False, weights=None,
+                  suitability=None, reference_max_distance=None):
+    """Route table with the Route Efficiency Score, best first.
+
+    weights                 {"distance": .., "ship_mode": ..}; default 70/30 (config.py).
+    suitability             {ship mode: 0-1}; default from config.py (an assumption).
+    reference_max_distance  distance that scores 0. Default = longest route in `df`,
+                            which makes scores RELATIVE to the rows passed in. Pass a
+                            fixed value (e.g. from the full dataset) to keep scores
+                            stable while filtering.
+
+    Routes whose distance is unknown (NaN) cannot be scored. By default they are
+    EXCLUDED so they can never appear as "least efficient". Use
+    `unscored_routes()` to list them, or `include_unscored=True` to append them
+    at the end (their score stays NaN, never 0).
+    """
     route_col = "Route (Factory-Region)" if level == "Region" else "Route (Factory-State)"
     geo_col = "Region" if level == "Region" else "State/Province"
 
@@ -170,19 +296,24 @@ def route_summary(df, level="Region"):
     ).reset_index().rename(columns={route_col: "Route", "Avg_Distance": "Avg Distance (mi)",
                                       "Raw_Avg_Lead_Time": "Raw Avg Lead Time (days) [UNRELIABLE]"})
 
-    # Dominant ship mode + speed-weight per route
+    # Share of each ship mode on the route, e.g. {"Standard Class": 0.7, "First Class": 0.3}
     mode_mix = df.groupby([route_col])["Ship Mode"].agg(lambda x: x.value_counts(normalize=True).to_dict())
     g["Ship Mode Mix"] = g["Route"].map(mode_mix)
-    g["Speed Weight"] = g["Ship Mode Mix"].apply(
-        lambda d: sum(SHIP_MODE_SPEED_WEIGHT.get(m, 0.5) * share for m, share in d.items())
-    )
 
-    # Efficiency proxy: shorter distance + higher speed-weight = more efficient
-    max_dist = g["Avg Distance (mi)"].max()
-    g["Distance Score"] = 100 * (1 - (g["Avg Distance (mi)"] / max_dist))
-    g["Route Efficiency Proxy Score"] = (0.6 * g["Distance Score"] + 0.4 * (g["Speed Weight"] * 100)).round(1)
+    g = score_routes(g, weights=weights, suitability=suitability,
+                     reference_max_distance=reference_max_distance)
 
-    return g.sort_values("Route Efficiency Proxy Score", ascending=False)
+    g = g.sort_values("Route Efficiency Proxy Score", ascending=False, na_position="last")
+    if not include_unscored:
+        g = g[g["Route Efficiency Proxy Score"].notna()]
+    return g
+
+
+def unscored_routes(df, level="Region"):
+    """Routes that cannot be scored because their distance is unknown."""
+    full = route_summary(df, level, include_unscored=True)
+    cols = ["Route", "Factory", "Shipments", "Sales"]
+    return full[full["Route Efficiency Proxy Score"].isna()][cols]
 
 
 def ship_mode_summary(df):
@@ -216,6 +347,8 @@ def geo_bottleneck_summary(df):
         "High Volume + Long Distance",
         "Normal"
     )
+    # Unknown distance can't be judged -- say so instead of calling it "Normal".
+    g.loc[g["Avg Distance (mi)"].isna(), "Bottleneck Risk"] = "Not assessed (no distance)"
     return g.sort_values("Shipments", ascending=False)
 
 
@@ -230,14 +363,11 @@ def factory_route_footprint(df):
     return g.sort_values("Shipments", ascending=False)
 
 
-def ship_mode_by_route_level(df, level="Region"):
-    geo_col = "Region" if level == "Region" else "State/Province"
-    g = df.groupby([geo_col, "Ship Mode"]).agg(Shipments=("Order ID", "nunique")).reset_index()
-    return g
-
-
 if __name__ == "__main__":
-    df, meta = load_and_clean()
+    try:
+        df, meta = load_and_clean()
+    except DataFileError as exc:
+        raise SystemExit(f"Data problem: {exc}")
     print("Cleaning summary:", meta)
     print("\nRaw lead time sanity check (should look broken):")
     print(df["Raw Lead Time (days)"].describe())

@@ -1,4 +1,11 @@
-streamlit>=1.32
-pandas>=2.0
-numpy>=1.24
+# Lower bounds are the OLDEST versions actually tested (Python 3.12). See README "Tested environments".
+# Older versions were not tested (pandas 2.0 / numpy 1.24 cannot be installed on Python 3.12).
+# If you stay on numpy < 2, also install pyarrow 17.x: the newest pyarrow needs numpy 2 or newer.
+streamlit>=1.50
+pandas>=2.1.1
+numpy>=1.26
 plotly>=5.18
+ortools>=9.9
+openpyxl>=3.1
+reportlab>=4.0
+pytest>=8.0
